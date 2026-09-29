@@ -20,15 +20,15 @@ enum KeyTap {
             // pause, again. Two events posted back to back read as a single
             // press to the input methods that listen for this.
             DispatchQueue.global(qos: .userInteractive).async {
-                deliver(stroke, holdMs: 45)
-                usleep(140_000)
-                deliver(stroke, holdMs: 45)
+                deliver(stroke)
+                usleep(KeyStroke.doublePressGapMilliseconds * 1000)
+                deliver(stroke)
             }
         case .hold:
             // Held long enough to pass for a deliberate press-and-hold, which
             // is what push-to-talk and app switchers wait for.
             DispatchQueue.global(qos: .userInteractive).async {
-                deliver(stroke, holdMs: 800)
+                deliver(stroke)
             }
         }
     }
@@ -56,7 +56,8 @@ enum KeyTap {
 
     // MARK: - posting
 
-    private static func deliver(_ stroke: KeyStroke, holdMs: UInt32 = 0) {
+    private static func deliver(_ stroke: KeyStroke) {
+        let holdMs = stroke.holdMilliseconds
         if stroke.isMedia {
             postMedia(stroke.keyCode, down: true)
             if holdMs > 0 { usleep(holdMs * 1000) }
@@ -66,6 +67,9 @@ enum KeyTap {
         let flags = CGEventFlags(rawValue: stroke.modifiers)
         // A modifier on its own — Right Option, Fn — is not a keystroke. It has
         // to be posted as a change of modifier state, held, and released.
+        // KeyStroke.holdMilliseconds is what keeps that hold from collapsing to
+        // zero, which is the difference between the app hearing a press and
+        // discarding it.
         if stroke.isModifierOnly {
             postModifier(stroke.keyCode, flags: modifierFlag(for: stroke.keyCode), down: true)
             if holdMs > 0 { usleep(holdMs * 1000) }

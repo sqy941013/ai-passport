@@ -75,6 +75,36 @@ public struct KeyStroke: Codable, Equatable, Hashable {
     /// Those have to be held and released rather than typed.
     public var isModifierOnly: Bool { Self.modifierKeyCodes.contains(keyCode) }
 
+    /// Enough for a listener to time the press, and still short enough to
+    /// feel like a tap.
+    public static let modifierTapMilliseconds: UInt32 = 90
+    public static let doublePressHoldMilliseconds: UInt32 = 45
+    public static let doublePressGapMilliseconds: UInt32 = 140
+    public static let holdMillisecondsHeld: UInt32 = 800
+
+    /// How long the key stays down, in milliseconds.
+    ///
+    /// An ordinary key can be pressed and released in the same instant, which
+    /// is what a tap is. A modifier pressed on its own cannot: it goes out as
+    /// a change of modifier state, and dictation apps that watch Fn or Option
+    /// time the press rather than merely note it. Posted back to back with no
+    /// gap, the event is dropped before it reaches them and the keystroke
+    /// leaves the machine having done nothing. So a lone modifier always keeps
+    /// a floor, while everything else is left exactly as it was.
+    public var holdMilliseconds: UInt32 {
+        switch style {
+        case .tap: return isModifierOnly ? Self.modifierTapMilliseconds : 0
+        case .double: return Self.doublePressHoldMilliseconds
+        case .hold: return Self.holdMillisecondsHeld
+        }
+    }
+
+    /// Whether the two presses of a double press read as two. A gap that is
+    /// not comfortably longer than the press itself collapses into one.
+    public static var doublePressIsDistinct: Bool {
+        doublePressGapMilliseconds > doublePressHoldMilliseconds
+    }
+
     /// Virtual key codes of the keys that only ever act as modifiers.
     public static let modifierKeyCodes: Set<UInt16> = [
         0x37, 0x36,  // command, right command

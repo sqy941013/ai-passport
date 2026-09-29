@@ -198,6 +198,49 @@ do {
     expect(LogLine.parse("裸行没有分类").category.isEmpty, "bare log line")
 }
 
+do {
+    // A modifier pressed on its own is posted as a modifier-state change, and
+    // a dictation app listening on Fn or Option times the press rather than
+    // merely noting it. Released in the same instant it went down, the event
+    // never reached them — the tap left the machine and did nothing. A lone
+    // modifier therefore keeps a floor that an ordinary key does not need.
+    let optionTap = KeyStroke(keyCode: 0x3A, modifiers: 0, label: "⌥ 左", style: .tap)
+    expect(optionTap.isModifierOnly, "option on its own is a modifier")
+    expect(
+        optionTap.holdMilliseconds >= 50,
+        "a tapped modifier is held long enough for a listener to time it")
+    expect(
+        optionTap.holdMilliseconds <= 200,
+        "a tapped modifier is still short enough to feel like a tap")
+
+    let fnTap = KeyStroke(keyCode: 0x3F, modifiers: 0, label: "fn", style: .tap)
+    expect(fnTap.holdMilliseconds == optionTap.holdMilliseconds, "every lone modifier gets the same floor")
+
+    // Nothing else moves. ⌘C and ⌥↩ already reach their apps with no hold,
+    // and padding every shortcut would change working bindings for no reason.
+    let copy = KeyStroke(keyCode: 0x08, modifiers: KeyStroke.command, label: "⌘C", style: .tap)
+    expect(!copy.isModifierOnly, "⌘C is not a lone modifier")
+    expect(copy.holdMilliseconds == 0, "an ordinary tap is not padded")
+    let newline = KeyStroke(keyCode: 0x24, modifiers: KeyStroke.option, label: "⌥↩", style: .tap)
+    expect(newline.holdMilliseconds == 0, "option as a prefix is not padded")
+    let f13 = KeyStroke(keyCode: 0x69, modifiers: 0, label: "F13", style: .tap)
+    expect(f13.holdMilliseconds == 0, "a function key tap is not padded")
+
+    // The other two styles keep the timings their comments describe.
+    expect(optionTap.style == .tap, "tap style is a single press")
+    let optionHold = KeyStroke(keyCode: 0x3A, modifiers: 0, label: "⌥ 左", style: .hold)
+    expect(optionHold.holdMilliseconds >= 500, "a held modifier is held long enough to read as deliberate")
+    expect(optionHold.holdMilliseconds > optionTap.holdMilliseconds, "hold outlasts tap")
+    let optionDouble = KeyStroke(keyCode: 0x3A, modifiers: 0, label: "⌥ 左", style: .double)
+    expect(optionDouble.holdMilliseconds > 0, "a double press presses")
+    expect(KeyStroke.doublePressIsDistinct, "the gap between two presses outlasts a press")
+
+    // Media keys keep their own path, but the timing still comes from here.
+    let volume = KeyStroke(keyCode: 0x48, modifiers: 0, label: "🔊", style: .tap, isMedia: true)
+    expect(volume.isMedia && !volume.isModifierOnly, "volume is media, not a modifier")
+    expect(volume.holdMilliseconds == 0, "a media tap is not padded")
+}
+
 if failed == 0 {
     print("ALL PASSED")
     exit(0)
