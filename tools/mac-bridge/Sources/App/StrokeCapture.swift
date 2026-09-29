@@ -47,6 +47,24 @@ struct StrokeCaptureSheet: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
 
+            // Only a modifier pressed on its own has the choice. An ordinary key
+            // is delivered one way and there is nothing to pick.
+            if draft.stroke?.isModifierOnly == true {
+                HStack {
+                    Text("发送方式")
+                        .font(.caption)
+                    Spacer()
+                    Picker("", selection: $draft.delivery) {
+                        ForEach(KeyStroke.Delivery.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                }
+                Text("有的软件只认状态变化，有的只认按键；都不行就换另一种")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
             StrokeRecorder { draft.stroke = $0 }
                 .frame(height: 0)
 
@@ -57,6 +75,7 @@ struct StrokeCaptureSheet: View {
                 Button("保存") {
                     if var s = draft.stroke {
                         s.style = draft.style
+                        s.delivery = draft.delivery
                         onCapture(s)
                     }
                     dismiss()
@@ -75,10 +94,12 @@ struct StrokeCaptureSheet: View {
 private final class StrokeDraft: ObservableObject {
     @Published var stroke: KeyStroke?
     @Published var style: KeyStroke.Style
+    @Published var delivery: KeyStroke.Delivery
 
     init(_ current: KeyStroke?) {
         stroke = current
         style = current?.style ?? .tap
+        delivery = current?.delivery ?? .both
     }
 }
 
@@ -98,6 +119,11 @@ private struct StrokeRecorder: NSViewRepresentable {
 
 final class RecorderView: NSView {
     var onCapture: ((KeyStroke) -> Void)?
+    /// The physical modifier keys down at this moment. The flags cannot say
+    /// which side a modifier was on, and an app offering "left Option" as its
+    /// hotkey can, so the side is kept and replayed with the key.
+    private var heldModifiers: [UInt16] = []
+
     override var acceptsFirstResponder: Bool { true }
 
     override func viewDidMoveToWindow() {
@@ -111,7 +137,8 @@ final class RecorderView: NSView {
         onCapture?(KeyStroke(
             keyCode: event.keyCode,
             modifiers: mods,
-            label: KeyStroke.label(keyCode: event.keyCode, modifiers: mods, keyName: name)))
+            label: KeyStroke.label(keyCode: event.keyCode, modifiers: mods, keyName: name),
+            modifierKeyCodes: heldModifiers))
     }
 
     /// Pressing a modifier alone arrives here, not in keyDown. Recorded on the
@@ -119,7 +146,11 @@ final class RecorderView: NSView {
     override func flagsChanged(with event: NSEvent) {
         guard KeyStroke.modifierKeyCodes.contains(event.keyCode) else { return }
         let stillDown = UInt64(event.modifierFlags.rawValue) & Self.flagMask(event.keyCode) != 0
-        guard !stillDown else { return }
+        heldModifiers.removeAll { $0 == event.keyCode }
+        if stillDown {
+            heldModifiers.append(event.keyCode)
+            return
+        }
         let name = Self.modifierNames[event.keyCode] ?? "修饰键"
         onCapture?(KeyStroke(keyCode: event.keyCode, modifiers: 0, label: name))
     }

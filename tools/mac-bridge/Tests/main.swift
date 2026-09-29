@@ -241,6 +241,63 @@ do {
     expect(volume.holdMilliseconds == 0, "a media tap is not padded")
 }
 
+do {
+    // A modifier that only rides along on a key event was never pressed. An
+    // app that watches for the modifier going down and waits for the key
+    // afterwards never sees that shortcut at all, which is how a dictation app
+    // could ignore an Option+Space the log said it sent. So the modifiers are
+    // raised as their own state changes too, and every mode sends at least
+    // one half rather than nothing.
+    expect(KeyStroke.Delivery.allCases.count == 3, "three delivery modes")
+    expect(KeyStroke.Delivery.both.sendsState && KeyStroke.Delivery.both.sendsInline,
+        "both sends both halves")
+    expect(KeyStroke.Delivery.state.sendsState, "state presses the modifiers")
+    expect(!KeyStroke.Delivery.state.sendsInline, "state sends no flag-bearing key")
+    expect(KeyStroke.Delivery.keystroke.sendsInline, "keystroke sends the flag-bearing key")
+    expect(!KeyStroke.Delivery.keystroke.sendsState, "keystroke presses nothing")
+    for d in KeyStroke.Delivery.allCases {
+        expect(d.sendsState || d.sendsInline, "\(d.rawValue) sends something")
+    }
+
+    // The side of a modifier has to survive, because the flags cannot carry it
+    // and an app asking for "left Option" can tell.
+    let optionSpace = KeyStroke(keyCode: 0x31, modifiers: KeyStroke.option, label: "⌥空格",
+                                modifierKeyCodes: [0x3A])
+    expect(optionSpace.modifierKeys == [0x3A], "recorded left option is replayed as left")
+    let rightOptionSpace = KeyStroke(keyCode: 0x31, modifiers: KeyStroke.option, label: "⌥空格",
+                                     modifierKeyCodes: [0x3D])
+    expect(rightOptionSpace.modifierKeys == [0x3D], "recorded right option stays right")
+    expect(optionSpace.modifierKeys != rightOptionSpace.modifierKeys,
+        "left and right are not the same key")
+
+    // A shortcut recorded before the side was kept still names its modifiers,
+    // assuming the left, rather than sending none.
+    let noSides = KeyStroke(keyCode: 0x31, modifiers: KeyStroke.option, label: "⌥空格")
+    expect(noSides.modifierKeys == [0x3A], "an unrecorded side falls back to left")
+    let cmdShift = KeyStroke(keyCode: 0x08, modifiers: KeyStroke.command | KeyStroke.shift,
+                             label: "⌘⇧C")
+    expect(cmdShift.modifierKeys == [0x37, 0x38], "each named modifier is raised")
+    let bare = KeyStroke(keyCode: 0x08, modifiers: 0, label: "C")
+    expect(bare.modifierKeys.isEmpty, "a key with no modifier raises none")
+
+    // A lone modifier raises its own key, and nothing else.
+    let option = KeyStroke(keyCode: 0x3A, modifiers: 0, label: "⌥ 左", style: .tap)
+    expect(option.modifierKeys == [0x3A], "a lone modifier raises itself")
+    expect(option.holdMilliseconds >= 50, "and is still held long enough to be timed")
+
+    // A binding saved before this choice existed has to keep working.
+    let legacy = Data(#"{"keyCode":49,"modifiers":0,"label":"⌥空格","style":"tap"}"#.utf8)
+    let old = try? JSONDecoder().decode(KeyStroke.self, from: legacy)
+    expect(old?.delivery == .both, "a binding without delivery covers both")
+    expect(old?.modifierKeyCodes.isEmpty == true, "and without recorded sides")
+
+    let stored = KeyStroke(keyCode: 0x31, modifiers: KeyStroke.option, label: "⌥空格",
+                           style: .hold, delivery: .state, modifierKeyCodes: [0x3A])
+    let back = try? JSONDecoder().decode(KeyStroke.self, from: JSONEncoder().encode(stored))
+    expect(back == stored, "delivery and sides round trip")
+    expect(back?.modifierKeys == [0x3A], "and the side survives the round trip")
+}
+
 if failed == 0 {
     print("ALL PASSED")
     exit(0)

@@ -65,20 +65,35 @@ enum KeyTap {
             return
         }
         let flags = CGEventFlags(rawValue: stroke.modifiers)
-        // A modifier on its own — Right Option, Fn — is not a keystroke. It has
-        // to be posted as a change of modifier state, held, and released.
-        // KeyStroke.holdMilliseconds is what keeps that hold from collapsing to
-        // zero, which is the difference between the app hearing a press and
-        // discarding it.
-        if stroke.isModifierOnly {
-            postModifier(stroke.keyCode, flags: modifierFlag(for: stroke.keyCode), down: true)
-            if holdMs > 0 { usleep(holdMs * 1000) }
-            postModifier(stroke.keyCode, flags: [], down: false)
-            return
+
+        // A modifier that only rides along on the key event was never really
+        // pressed. An app that watches for the modifier going down and waits
+        // for the key afterwards never sees the shortcut at all, which is why
+        // Option+Space could reach one dictation app and not another. Raising
+        // the modifiers as their own state changes first, and letting go after,
+        // replays the pair the way a hand would have produced it.
+        if stroke.delivery.sendsState {
+            for key in stroke.modifierKeys {
+                postModifier(key, flags: modifierFlag(for: key), down: true)
+            }
         }
-        keyDown(stroke.keyCode, flags: flags)
-        if holdMs > 0 { usleep(holdMs * 1000) }
-        keyUp(stroke.keyCode, flags: flags)
+
+        // A stroke that is nothing but a modifier has no other key to send;
+        // sending its own key event as well is the other way an app may be
+        // listening for it.
+        if stroke.isModifierOnly && !stroke.delivery.sendsInline {
+            if stroke.delivery.sendsState, holdMs > 0 { usleep(holdMs * 1000) }
+        } else {
+            keyDown(stroke.keyCode, flags: flags)
+            if holdMs > 0 { usleep(holdMs * 1000) }
+            keyUp(stroke.keyCode, flags: flags)
+        }
+
+        if stroke.delivery.sendsState {
+            for key in stroke.modifierKeys.reversed() {
+                postModifier(key, flags: [], down: false)
+            }
+        }
     }
 
     /// The flag a modifier key raises while it is held.
