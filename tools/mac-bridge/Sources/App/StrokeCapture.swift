@@ -8,7 +8,14 @@ import SwiftUI
 struct StrokeCaptureSheet: View {
     let title: String
     let onCapture: (KeyStroke) -> Void
-    @ObservedObject private var draft: StrokeDraft
+    /// Owned, not merely observed. The sheet is a value type: every re-render
+    /// by the parent runs this initialiser again, and a draft built here as a
+    /// plain stored property would be a fresh object each time. It then read as
+    /// a panel that forgot what you just pressed — the key you had recorded
+    /// reverted a moment after it appeared, and so did the style, because both
+    /// live on the same draft. A StateObject is created once and kept across
+    /// those re-renders.
+    @StateObject private var draft: StrokeDraft
     @Environment(\.dismiss) private var dismiss
 
     init(title: String, current: KeyStroke? = nil, onCapture: @escaping (KeyStroke) -> Void) {
@@ -16,7 +23,7 @@ struct StrokeCaptureSheet: View {
         self.onCapture = onCapture
         // Opening on an existing binding shows it, so changing only how it is
         // sent does not mean recording the key again.
-        self.draft = StrokeDraft(current)
+        _draft = StateObject(wrappedValue: StrokeDraft(current))
     }
 
     var body: some View {
