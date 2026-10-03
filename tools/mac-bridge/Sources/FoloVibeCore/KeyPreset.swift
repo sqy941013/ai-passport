@@ -45,6 +45,19 @@ public struct KeyPreset: Identifiable, Equatable {
 
     public static func grouped(_ group: Group) -> [KeyPreset] { all.filter { $0.group == group } }
 
+    /// The shortcut worth putting on a second line under this preset's name, or
+    /// nothing when it would only repeat the name.
+    ///
+    /// Presets are mostly named after their own key, and `KeyStroke` falls back
+    /// to that name when it is given no label, so printing both puts "空格"
+    /// under "空格" and "播放 / 暂停" under "播放 / 暂停" down the whole list.
+    /// The ones that earn a second line are the ones whose name is a
+    /// description rather than the key: "发送回车 ↩", "复制 ⌘C".
+    public var shortcutNote: String? {
+        let text = stroke.display
+        return title.localizedCaseInsensitiveContains(text) ? nil : text
+    }
+
     public static let all: [KeyPreset] = [
         // 文本
         KeyPreset("return", "发送回车", "发送", .text, 0x24, label: "↩"),

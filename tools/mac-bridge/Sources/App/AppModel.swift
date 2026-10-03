@@ -62,8 +62,12 @@ final class AppModel: ObservableObject {
     @Published var listenerApps = ""
     /// The grid cell whose gesture just fired, lit briefly in settings.
     @Published var firedSlot: GestureSlot?
+    /// The binding whose action is being chosen.
+    @Published var actionTarget: GestureSlot?
     /// Which grid slot is currently recording a shortcut.
     @Published var strokeTarget: GestureSlot?
+    /// Which grid slot is having the name shown on the device edited.
+    @Published var labelTarget: GestureSlot?
     @Published var firmwareVersion = "—"
     @Published var otaProgress: Double = 0
     @Published var otaNote = ""
